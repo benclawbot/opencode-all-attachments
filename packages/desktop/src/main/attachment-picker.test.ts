@@ -4,10 +4,23 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
   assertAttachmentBudget,
+  attachmentMimeType,
   createPickedFileAuthorizations,
   MAX_ATTACHMENT_BYTES,
   readAttachment,
 } from "./attachment-picker"
+
+describe("attachmentMimeType", () => {
+  test("detects common native picker file types and falls back for unknown extensions", () => {
+    expect(attachmentMimeType("recording.mp4")).toBe("video/mp4")
+    expect(attachmentMimeType("audio.wav")).toBe("audio/wav")
+    expect(attachmentMimeType("report.docx")).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    expect(attachmentMimeType("archive.zip")).toBe("application/zip")
+    expect(attachmentMimeType("file.unknown")).toBe("application/octet-stream")
+  })
+})
 
 describe("assertAttachmentBudget", () => {
   test("accepts selections within the media ingest limit", () => {

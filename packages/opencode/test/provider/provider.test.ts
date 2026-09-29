@@ -656,6 +656,7 @@ it.instance(
     const model = providers[ProviderV2.ID.make("test-provider")].models["test-model"]
     expect(model.capabilities.input.text).toBe(true)
     expect(model.capabilities.output.text).toBe(true)
+    expect(model.capabilities.attachment).toBe(true)
   }),
   {
     config: {
@@ -1005,7 +1006,7 @@ it.instance(
               attachment: true,
               temperature: true,
               limit: { context: 32000, output: 8000 },
-              modalities: { input: ["text", "image"], output: ["text"] },
+              modalities: { input: ["text", "image", "file"], output: ["text"] },
             },
           },
           options: { apiKey: "new-key" },
@@ -1469,6 +1470,7 @@ test("models.dev normalization fills required response fields", () => {
         interleaved: "reasoning_text",
         cost: { input: 2.5, output: 15 },
         limit: { context: 1_050_000, input: 922_000, output: 128_000 },
+        attachment: false,
       },
     },
   } as unknown as ModelsDev.Provider
@@ -1477,7 +1479,7 @@ test("models.dev normalization fills required response fields", () => {
   expect(model.api.url).toBe("")
   expect(model.capabilities.temperature).toBe(false)
   expect(model.capabilities.reasoning).toBe(false)
-  expect(model.capabilities.attachment).toBe(false)
+  expect(model.capabilities.attachment).toBe(true)
   expect(model.capabilities.toolcall).toBe(true)
   expect(model.capabilities.interleaved).toEqual({ field: "reasoning_text" })
   expect(model.release_date).toBe("")

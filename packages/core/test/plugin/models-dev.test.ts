@@ -95,6 +95,7 @@ describe("ModelsDevPlugin", () => {
 
       expect(base?.variants).toEqual([])
       expect(base?.request.body).toEqual({})
+      expect(base?.capabilities.input).toContain("file")
       expect(fast).toMatchObject({
         id: "gpt-5.4-fast",
         providerID: "acme",

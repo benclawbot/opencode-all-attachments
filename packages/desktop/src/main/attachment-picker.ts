@@ -1,8 +1,13 @@
 import { randomUUID } from "node:crypto"
 import { open } from "node:fs/promises"
+import { lookup } from "mime-types"
 import { nativeT } from "./native-translations"
 
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+
+export function attachmentMimeType(filePath: string) {
+  return lookup(filePath) || "application/octet-stream"
+}
 
 export function createPickedFileAuthorizations(
   read: (path: string, maxBytes: number) => Promise<ArrayBuffer> = readAttachment,

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { ACCEPTED_FILE_TYPES } from "@/constants/file-picker"
 import { attachmentMime, pickAttachmentFiles } from "./files"
 import { pasteMode } from "./paste"
 
@@ -18,9 +19,25 @@ describe("attachmentMime", () => {
     expect(await attachmentMime(file)).toBe("text/plain")
   })
 
-  test("rejects binary files", async () => {
+  test("accepts common non-image file types", async () => {
+    for (const [name, mime, expected] of [
+      ["records.csv", "text/csv", "text/plain"],
+      ["archive.zip", "application/zip", "application/zip"],
+      ["report.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+      ["audio.wav", "audio/wav", "audio/wav"],
+      ["video.mp4", "video/mp4", "video/mp4"],
+    ]) {
+      expect(await attachmentMime(new File([Uint8Array.of(0, 255, 1)], name, { type: mime }))).toBe(expected)
+    }
+  })
+
+  test("accepts unknown binary files with a generic MIME type", async () => {
     const file = new File([Uint8Array.of(0, 255, 1, 2)], "blob.bin", { type: "application/octet-stream" })
-    expect(await attachmentMime(file)).toBeUndefined()
+    expect(await attachmentMime(file)).toBe("application/octet-stream")
+  })
+
+  test("allows all file extensions in pickers", () => {
+    expect(ACCEPTED_FILE_TYPES).toEqual(["*/*"])
   })
 })
 

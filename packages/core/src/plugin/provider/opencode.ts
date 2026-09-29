@@ -144,7 +144,8 @@ export const OpencodePlugin = define<HttpClient.HttpClient | EventV2.Service | S
                 : { id: model.api.id, type: "native", url: config.provider.api, settings: {} }
             }
             if (config.tool_call !== undefined) model.capabilities.tools = config.tool_call
-            if (config.modalities?.input !== undefined) model.capabilities.input = [...config.modalities.input]
+            if (config.modalities?.input !== undefined)
+              model.capabilities.input = [...new Set(["file", ...config.modalities.input])]
             if (config.modalities?.output !== undefined) model.capabilities.output = [...config.modalities.output]
             const packageName = config.provider?.npm ?? item.npm
             const lowerer = ConfigProviderOptionsV1.get(packageName)

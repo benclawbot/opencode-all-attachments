@@ -99,7 +99,7 @@ function applyModel(
       }
   draft.capabilities = {
     tools: model.tool_call,
-    input: [...(model.modalities?.input ?? [])],
+    input: [...new Set(["file", ...(model.modalities?.input ?? [])])],
     output: [...(model.modalities?.output ?? [])],
   }
   draft.variants = []

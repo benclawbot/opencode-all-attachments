@@ -1224,13 +1224,16 @@ export function Prompt(props: PromptProps) {
   async function pasteAttachment(file: { filename?: string; filepath?: string; content: string; mime: string }) {
     const currentOffset = input.cursorOffset
     const extmarkStart = currentOffset
-    const pdf = file.mime === "application/pdf"
+    const isPdf = file.mime === "application/pdf"
+    const isImage = file.mime.startsWith("image/")
+    const kind = isPdf ? "PDF" : isImage ? "Image" : "File"
     const count = store.prompt.parts.filter((x) => {
       if (x.type !== "file") return false
-      if (pdf) return x.mime === "application/pdf"
-      return x.mime.startsWith("image/")
+      if (isPdf) return x.mime === "application/pdf"
+      if (isImage) return x.mime.startsWith("image/")
+      return true
     }).length
-    const virtualText = pdf ? `[PDF ${count + 1}]` : `[Image ${count + 1}]`
+    const virtualText = `[${kind} ${count + 1}]`
     const extmarkEnd = extmarkStart + virtualText.length
     const textToInsert = virtualText + " "
 

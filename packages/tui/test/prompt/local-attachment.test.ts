@@ -28,8 +28,26 @@ describe("prompt local attachments", () => {
     })
   })
 
-  test("ignores unsupported and unreadable local files", async () => {
-    expect(await readLocalAttachmentWith(files({ mime: "text/plain" }), "/tmp/file.txt")).toBeUndefined()
+  test("reads text and any binary file type", async () => {
+    expect(await readLocalAttachmentWith(files({ mime: "text/csv", text: "name,count\nalpha,1\n" }), "/tmp/data.csv"))
+      .toEqual({ type: "text", mime: "text/csv", content: "name,count\nalpha,1\n" })
+
+    const content = new Uint8Array([1, 2, 3])
+    for (const mime of ["application/zip", "audio/wav", "video/mp4", "application/octet-stream"]) {
+      expect(await readLocalAttachmentWith(files({ mime, bytes: content }), "/tmp/file.bin")).toEqual({
+        type: "binary",
+        mime,
+        content,
+      })
+    }
+  })
+
+  test("allows empty text files and ignores unreadable files", async () => {
+    expect(await readLocalAttachmentWith(files({ mime: "text/plain", text: "" }), "/tmp/empty.txt")).toEqual({
+      type: "text",
+      mime: "text/plain",
+      content: "",
+    })
     expect(
       await readLocalAttachmentWith(
         {

@@ -48,7 +48,17 @@ describe("toLLMMessages", () => {
   })
 
   test("maps every top-level V2 Session message type", () => {
-    const file = FileAttachment.make({ uri: "data:image/png;base64,aGVsbG8=", mime: "image/png", name: "hello.png" })
+    const files = [
+      FileAttachment.make({ uri: "data:image/png;base64,aGVsbG8=", mime: "image/png", name: "hello.png" }),
+      FileAttachment.make({
+        uri: "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEs=",
+        mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        name: "report.docx",
+      }),
+      FileAttachment.make({ uri: "data:text/plain;base64,SGVsbG8=", mime: "text/plain", name: "notes.txt" }),
+      FileAttachment.make({ uri: "data:video/mp4;base64,AAAA", mime: "video/mp4", name: "clip.mp4" }),
+      FileAttachment.make({ uri: "data:application/octet-stream;base64,AA==", mime: "application/octet-stream", name: "archive.bin" }),
+    ]
     const messages = toLLMMessages(
       [
         SessionMessage.AgentSwitched.make({
@@ -73,7 +83,7 @@ describe("toLLMMessages", () => {
           id: id("user"),
           type: "user",
           text: "Inspect this image",
-          files: [file],
+          files,
           agents: [AgentAttachment.make({ name: "build" })],
           time: { created },
         }),
@@ -113,6 +123,20 @@ describe("toLLMMessages", () => {
         content: [
           { type: "text", text: "Inspect this image" },
           { type: "media", mediaType: "image/png", data: "data:image/png;base64,aGVsbG8=", filename: "hello.png" },
+          {
+            type: "media",
+            mediaType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            data: "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEs=",
+            filename: "report.docx",
+          },
+          { type: "media", mediaType: "text/plain", data: "data:text/plain;base64,SGVsbG8=", filename: "notes.txt" },
+          { type: "media", mediaType: "video/mp4", data: "data:video/mp4;base64,AAAA", filename: "clip.mp4" },
+          {
+            type: "media",
+            mediaType: "application/octet-stream",
+            data: "data:application/octet-stream;base64,AA==",
+            filename: "archive.bin",
+          },
         ],
         metadata: { agents: [{ name: "build" }] },
       }),

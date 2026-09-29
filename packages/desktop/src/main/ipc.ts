@@ -9,7 +9,7 @@ import { parseDesktopNativeBundle, type DesktopNativeBundle } from "@opencode-ai
 import type { FatalRendererError, ServerReadyData, TitlebarTheme } from "../preload/types"
 import { runDesktopMenuAction } from "./desktop-menu-actions"
 import { setForceFocus } from "./debug"
-import { assertAttachmentBudget, createPickedFileAuthorizations } from "./attachment-picker"
+import { assertAttachmentBudget, attachmentMimeType, createPickedFileAuthorizations } from "./attachment-picker"
 import { getStore, removeStoreFileIfEmpty } from "./store"
 import {
   getPinchZoomEnabled,
@@ -179,6 +179,7 @@ export function registerIpcHandlers(deps: Deps) {
         result.filePaths.map(async (filePath) => ({
           path: filePath,
           name: basename(filePath),
+          mime: attachmentMimeType(filePath),
           size: (await stat(filePath)).size,
         })),
       )

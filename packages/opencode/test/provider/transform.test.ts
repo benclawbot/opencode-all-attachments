@@ -2577,6 +2577,35 @@ describe("ProviderTransform.message - empty image handling", () => {
     expect(result[0].content[1]).toEqual({ type: "image", image: `data:image/png;base64,${validBase64}` })
   })
 
+  test("passes attachment types to the provider even when catalog capabilities omit them", () => {
+    const content = [
+      { type: "image" as const, image: "data:image/png;base64,AA==" },
+      { type: "file" as const, data: "AAAA", mediaType: "video/mp4", filename: "clip.mp4" },
+      { type: "file" as const, data: "AAAA", mediaType: "application/pdf", filename: "paper.pdf" },
+      {
+        type: "file" as const,
+        data: "AAAA",
+        mediaType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename: "report.docx",
+      },
+      { type: "file" as const, data: "AAAA", mediaType: "text/plain", filename: "notes.txt" },
+      { type: "file" as const, data: "AAAA", mediaType: "application/octet-stream", filename: "archive.bin" },
+    ]
+    const model = {
+      ...mockModel,
+      id: "custom/file-test",
+      providerID: "custom",
+      api: { ...mockModel.api, id: "file-test", npm: "@ai-sdk/openai-compatible" },
+      capabilities: {
+        ...mockModel.capabilities,
+        input: { text: true, audio: false, image: false, video: false, pdf: false },
+      },
+    } as any
+    const result = ProviderTransform.message([{ role: "user", content }] as any[], model, {})
+
+    expect(result[0].content).toEqual(content)
+  })
+
   test("should handle mixed valid and empty images", () => {
     const validBase64 =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="

@@ -44,7 +44,9 @@ const IMAGE_EXTS = new Map([
 ])
 const TEXT_MIMES = new Set([
   "application/json",
+  "application/javascript",
   "application/ld+json",
+  "application/ecmascript",
   "application/toml",
   "application/x-toml",
   "application/x-yaml",
@@ -91,8 +93,10 @@ export async function attachmentMime(file: File) {
   const fallback = IMAGE_EXTS.get(suffix) ?? (suffix === "pdf" ? "application/pdf" : undefined)
   if ((!type || type === "application/octet-stream") && fallback) return fallback
 
+  if (type === "video/mp2t" && ["ts", "mts", "cts"].includes(suffix)) return "text/plain"
   if (textMime(type)) return "text/plain"
+  if (type) return type
   const bytes = new Uint8Array(await file.slice(0, SAMPLE).arrayBuffer())
-  if (!textBytes(bytes)) return
-  return "text/plain"
+  if (textBytes(bytes)) return "text/plain"
+  return "application/octet-stream"
 }

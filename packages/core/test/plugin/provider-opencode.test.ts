@@ -235,7 +235,7 @@ describe("OpencodePlugin", () => {
           expect(model).toMatchObject({
             name: "Remote Model",
             family: "remote",
-            capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
+            capabilities: { tools: true, input: ["file", "text", "image"], output: ["text"] },
             cost: [{ input: 1, output: 2, cache: { read: 0.1, write: 0 } }],
             limit: { context: 1000, output: 100 },
           })

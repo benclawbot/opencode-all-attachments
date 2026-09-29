@@ -1,7 +1,6 @@
 // @refresh reload
 
 import {
-  ACCEPTED_FILE_EXTENSIONS,
   AppBaseProviders,
   AppInterface,
   loadLocaleDict,
@@ -183,12 +182,14 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
         multiple: opts?.multiple ?? false,
         title: opts?.title,
         defaultPath: opts?.defaultPath,
-        extensions: opts?.extensions ?? ACCEPTED_FILE_EXTENSIONS,
+        extensions: opts?.extensions,
       })
       if (!result) return
       try {
         for (const file of result.files) {
-          const selected = new File([await window.api.readPickedFile(result.token, file.path)], file.name)
+          const selected = new File([await window.api.readPickedFile(result.token, file.path)], file.name, {
+            type: file.mime,
+          })
           attachmentPaths.set(selected, file.path)
           await onFile(selected)
         }

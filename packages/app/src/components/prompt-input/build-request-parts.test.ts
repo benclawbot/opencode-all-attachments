@@ -62,6 +62,34 @@ describe("buildRequestParts", () => {
           mime: "application/pdf",
           dataUrl: "data:application/pdf;base64,BBB",
         },
+        {
+          type: "image",
+          id: "img_3",
+          filename: "archive.zip",
+          mime: "application/zip",
+          dataUrl: "data:application/zip;base64,CCC",
+        },
+        {
+          type: "image",
+          id: "img_4",
+          filename: "audio.wav",
+          mime: "audio/wav",
+          dataUrl: "data:audio/wav;base64,DDD",
+        },
+        {
+          type: "image",
+          id: "img_5",
+          filename: "video.mp4",
+          mime: "video/mp4",
+          dataUrl: "data:video/mp4;base64,EEE",
+        },
+        {
+          type: "image",
+          id: "img_6",
+          filename: "blob.bin",
+          mime: "application/octet-stream",
+          dataUrl: "data:application/octet-stream;base64,FFF",
+        },
       ],
       text: "check these",
       messageID: "msg_multi",
@@ -71,8 +99,23 @@ describe("buildRequestParts", () => {
 
     const files = result.requestParts.filter((part) => part.type === "file" && part.url.startsWith("data:"))
 
-    expect(files).toHaveLength(2)
-    expect(files.map((part) => (part.type === "file" ? part.filename : ""))).toEqual(["a.png", "b.pdf"])
+    expect(files).toHaveLength(6)
+    expect(files.map((part) => (part.type === "file" ? part.filename : ""))).toEqual([
+      "a.png",
+      "b.pdf",
+      "archive.zip",
+      "audio.wav",
+      "video.mp4",
+      "blob.bin",
+    ])
+    expect(files.map((part) => (part.type === "file" ? part.mime : ""))).toEqual([
+      "image/png",
+      "application/pdf",
+      "application/zip",
+      "audio/wav",
+      "video/mp4",
+      "application/octet-stream",
+    ])
   })
 
   test("preserves an external attachment source path for the model", () => {

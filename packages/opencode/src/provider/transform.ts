@@ -5,16 +5,6 @@ import type * as Provider from "./provider"
 import type * as ModelsDev from "@opencode-ai/core/models-dev"
 import { iife } from "@/util/iife"
 
-type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
-
-function mimeToModality(mime: string): Modality | undefined {
-  if (mime.startsWith("image/")) return "image"
-  if (mime.startsWith("audio/")) return "audio"
-  if (mime.startsWith("video/")) return "video"
-  if (mime === "application/pdf") return "pdf"
-  return undefined
-}
-
 export const OUTPUT_TOKEN_MAX = 32_000
 
 // OpenAI Responses `include` value that returns the encrypted reasoning state
@@ -406,12 +396,12 @@ function applyCaching(msgs: ModelMessage[], model: Provider.Model): ModelMessage
   return msgs
 }
 
-function unsupportedParts(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
+function validateImageParts(msgs: ModelMessage[]): ModelMessage[] {
   return msgs.map((msg) => {
     if (msg.role !== "user" || !Array.isArray(msg.content)) return msg
 
-    const filtered = msg.content.map((part) => {
-      if (part.type !== "file" && part.type !== "image") return part
+    const content = msg.content.map((part) => {
+      if (part.type !== "image") return part
 
       // Check for empty base64 image data
       if (part.type === "image") {
@@ -427,20 +417,10 @@ function unsupportedParts(msgs: ModelMessage[], model: Provider.Model): ModelMes
         }
       }
 
-      const mime = part.type === "image" ? String(part.image).split(";")[0].replace("data:", "") : part.mediaType
-      const filename = part.type === "file" ? part.filename : undefined
-      const modality = mimeToModality(mime)
-      if (!modality) return part
-      if (model.capabilities.input[modality]) return part
-
-      const name = filename ? `"${filename}"` : modality
-      return {
-        type: "text" as const,
-        text: `ERROR: Cannot read ${name} (this model does not support ${modality} input). Inform the user.`,
-      }
+      return part
     })
 
-    return { ...msg, content: filtered }
+    return { ...msg, content }
   })
 }
 
@@ -463,7 +443,7 @@ function mapProviderOptions(
 }
 
 export function message(msgs: ModelMessage[], model: Provider.Model, options: Record<string, unknown>) {
-  msgs = unsupportedParts(msgs, model)
+  msgs = validateImageParts(msgs)
   msgs = normalizeMessages(msgs, model, options)
   const usesAnthropicAutomaticCaching =
     options.cacheControl !== undefined &&
