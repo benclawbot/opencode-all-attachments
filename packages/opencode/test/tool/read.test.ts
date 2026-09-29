@@ -585,6 +585,29 @@ describe("tool.read loaded instructions", () => {
 })
 
 describe("tool.read binary detection", () => {
+  it.live("reads DOCX text without sending a file part to the model", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped()
+      const bytes = yield* Effect.promise(async () => {
+        const { TextReader, Uint8ArrayWriter, ZipWriter } = await import("@zip.js/zip.js")
+        const zip = new ZipWriter(new Uint8ArrayWriter())
+        await zip.add(
+          "word/document.xml",
+          new TextReader(
+            "<w:document><w:p><w:t>Meeting &amp; notes</w:t></w:p><w:p><w:t>Next step</w:t></w:p></w:document>",
+          ),
+        )
+        return zip.close()
+      })
+      const filePath = path.join(dir, "meeting.docx")
+      yield* put(filePath, bytes)
+
+      const result = yield* exec(dir, { filePath })
+      expect(result.output).toContain("Meeting & notes\nNext step")
+      expect(result.attachments).toBeUndefined()
+    }),
+  )
+
   it.live("rejects text extension files with null bytes", () =>
     Effect.gen(function* () {
       const dir = yield* tmpdirScoped()

@@ -41,6 +41,7 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Truncate } from "@/tool/truncate"
 import { Image } from "@/image/image"
 import { decodeDataUrl } from "@/util/data-url"
+import { matchesLocalAttachment } from "@/util/attachment-file"
 import { Process } from "@/util/process"
 import { Cause, Effect, Exit, Latch, Layer, Option, Scope, Context, Schema, Types } from "effect"
 import { InstanceState } from "@/effect/instance-state"
@@ -785,6 +786,39 @@ const layer = Layer.effect(
           const url = new URL(part.url)
           switch (url.protocol) {
             case "data:":
+              if (
+                part.filename &&
+                path.extname(part.filename).toLowerCase() === ".docx" &&
+                (yield* Effect.promise(() => matchesLocalAttachment(part)))
+              ) {
+                const { read } = yield* registry.named()
+                const result = yield* read
+                  .execute(
+                    { filePath: part.filename },
+                    {
+                      sessionID: input.sessionID,
+                      abort: new AbortController().signal,
+                      agent: input.agent!,
+                      messageID: info.id,
+                      extra: { bypassCwdCheck: true },
+                      messages: [],
+                      metadata: () => Effect.void,
+                      ask: () => Effect.void,
+                    },
+                  )
+                  .pipe(Effect.exit)
+                if (Exit.isSuccess(result))
+                  return [
+                    {
+                      messageID: info.id,
+                      sessionID: input.sessionID,
+                      type: "text",
+                      synthetic: true,
+                      text: result.value.output,
+                    },
+                    { ...part, messageID: info.id, sessionID: input.sessionID },
+                  ]
+              }
               if (part.mime === "text/plain") {
                 return [
                   {

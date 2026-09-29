@@ -319,6 +319,48 @@ describe("session.message-v2.toModelMessage", () => {
     ])
   })
 
+  test("gives OpenAI-compatible models a local file path when their chat API cannot accept files", async () => {
+    const filename = import.meta.filename
+    const url = `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${Buffer.from(await Bun.file(filename).bytes()).toString("base64")}`
+    const attachment = {
+      ...basePart("m-user", "p-file"),
+      type: "file" as const,
+      mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      filename,
+      url,
+    }
+    const input: SessionV1.WithParts[] = [{ info: userInfo("m-user"), parts: [attachment] as SessionV1.Part[] }]
+    const compatible = { ...model, api: { ...model.api, npm: "@ai-sdk/openai-compatible" } }
+
+    expect(await MessageV2.toModelMessages(input, compatible)).toStrictEqual([
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `Attached file available to tools: ${JSON.stringify(filename)} (${attachment.mime}). Use the read tool to inspect it.`,
+          },
+        ],
+      },
+    ])
+    expect(await MessageV2.toModelMessages(input, model)).toStrictEqual([
+      {
+        role: "user",
+        content: [{ type: "file", data: attachment.url, filename, mediaType: attachment.mime }],
+      },
+    ])
+
+    const changed = [{ ...input[0], parts: [{ ...attachment, url: "data:application/octet-stream;base64,AQID" }] }]
+    expect(await MessageV2.toModelMessages(changed, compatible)).toStrictEqual([
+      {
+        role: "user",
+        content: [
+          { type: "file", data: "data:application/octet-stream;base64,AQID", filename, mediaType: attachment.mime },
+        ],
+      },
+    ])
+  })
+
   test("converts assistant tool completion into tool-call + tool-result messages with attachments", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"

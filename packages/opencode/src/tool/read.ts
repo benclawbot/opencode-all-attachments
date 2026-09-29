@@ -324,6 +324,72 @@ export const ReadTool = Tool.define<
         }
       }
 
+      if (path.extname(filepath).toLowerCase() === ".docx") {
+        const bytes = yield* fs.readFile(filepath)
+        const content = yield* Effect.promise(async () => {
+          const { Uint8ArrayReader, ZipReader } = await import("@zip.js/zip.js")
+          const { Parser } = await import("htmlparser2")
+          const zip = new ZipReader(new Uint8ArrayReader(new Uint8Array(bytes)))
+          try {
+            const entry = (await zip.getEntries()).find((item) => item.filename === "word/document.xml")
+            if (!entry?.getData) throw new Error(`Invalid DOCX file: ${filepath}`)
+            const maxSize = 2 * 1024 * 1024
+            if (entry.uncompressedSize > maxSize) throw new Error(`DOCX text is too large: ${filepath}`)
+            const chunks: Uint8Array[] = []
+            let size = 0
+            await entry.getData(
+              new WritableStream<Uint8Array>({
+                write(chunk) {
+                  size += chunk.byteLength
+                  if (size > maxSize) throw new Error(`DOCX text is too large: ${filepath}`)
+                  chunks.push(chunk)
+                },
+              }),
+            )
+            const xml = Buffer.concat(chunks).toString("utf8")
+            const text: string[] = []
+            let inText = false
+            const parser = new Parser(
+              {
+                onopentagname(name) {
+                  if (name === "w:t") inText = true
+                  if (name === "w:tab") text.push("\t")
+                  if (name === "w:br") text.push("\n")
+                },
+                ontext(value) {
+                  if (inText) text.push(value)
+                },
+                onclosetag(name) {
+                  if (name === "w:t") inText = false
+                  if (name === "w:p") text.push("\n")
+                },
+              },
+              { xmlMode: true, decodeEntities: true },
+            )
+            parser.end(xml)
+            return text.join("").trim()
+          } finally {
+            await zip.close()
+          }
+        })
+        const truncated = Buffer.byteLength(content, "utf8") > MAX_BYTES
+        const text = truncated ? Buffer.from(content).subarray(0, MAX_BYTES).toString("utf8") : content
+        const output = [
+          `<path>${filepath}</path>`,
+          "<type>document</type>",
+          `<content>\n${text}\n</content>`,
+          ...(truncated ? [`(Output capped at ${MAX_BYTES_LABEL})`] : []),
+          ...(loaded.length > 0
+            ? [`<system-reminder>\n${loaded.map((item) => item.content).join("\n\n")}\n</system-reminder>`]
+            : []),
+        ].join("\n")
+        return {
+          title,
+          output,
+          metadata: { preview: text.slice(0, 1000), truncated, loaded: loaded.map((item) => item.filepath) },
+        }
+      }
+
       if (isBinaryFile(filepath, sample)) {
         return yield* Effect.fail(new Error(`Cannot read binary file: ${filepath}`))
       }

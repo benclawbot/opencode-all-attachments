@@ -2131,6 +2131,61 @@ noLLMServer.instance(
 // Missing file handling
 
 noLLMServer.instance(
+  "reads a local DOCX attachment before sending the prompt",
+  () =>
+    Effect.gen(function* () {
+      const { directory: dir } = yield* TestInstance
+      const { TextReader, Uint8ArrayWriter, ZipWriter } = yield* Effect.promise(() => import("@zip.js/zip.js"))
+      const zip = new ZipWriter(new Uint8ArrayWriter())
+      yield* Effect.promise(() => zip.add("word/document.xml", new TextReader("<w:p><w:t>Meeting notes</w:t></w:p>")))
+      const bytes = yield* Effect.promise(() => zip.close())
+      const filename = path.join(dir, "notes.docx")
+      const fs = yield* FSUtil.Service
+      const sessions = yield* Session.Service
+      const prompt = yield* SessionPrompt.Service
+      yield* fs.writeWithDirs(filename, bytes)
+      const chat = yield* sessions.create({ title: "DOCX" })
+
+      const message = yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "build",
+        noReply: true,
+        parts: [
+          { type: "text", text: "read this" },
+          {
+            type: "file",
+            filename,
+            mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            url: `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${Buffer.from(bytes).toString("base64")}`,
+          },
+        ],
+      })
+      expect(message.parts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: "text", synthetic: true, text: expect.stringContaining("Meeting notes") }),
+        ]),
+      )
+
+      const changed = yield* sessions.create({ title: "Mismatched DOCX" })
+      const mismatch = yield* prompt.prompt({
+        sessionID: changed.id,
+        agent: "build",
+        noReply: true,
+        parts: [
+          {
+            type: "file",
+            filename,
+            mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            url: "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,AQID",
+          },
+        ],
+      })
+      expect(mismatch.parts.some((part) => part.type === "text" && part.text.includes("Meeting notes"))).toBe(false)
+    }),
+  { config: cfg },
+)
+
+noLLMServer.instance(
   "does not fail the prompt when a file part is missing",
   () =>
     Effect.gen(function* () {

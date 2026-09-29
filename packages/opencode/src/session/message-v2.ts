@@ -1,4 +1,5 @@
 import { SessionID, MessageID } from "./schema"
+import { matchesLocalAttachment } from "@/util/attachment-file"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import {
@@ -214,6 +215,18 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
           })
         // text/plain and directory files are converted into text parts, ignore them
         if (part.type === "file" && part.mime !== "text/plain" && part.mime !== "application/x-directory") {
+          if (
+            model.api.npm === "@ai-sdk/openai-compatible" &&
+            !part.mime.startsWith("image/") &&
+            !part.mime.startsWith("audio/") &&
+            (yield* Effect.promise(() => matchesLocalAttachment(part)))
+          ) {
+            userMessage.parts.push({
+              type: "text",
+              text: `Attached file available to tools: ${JSON.stringify(part.filename)} (${part.mime}). Use the read tool to inspect it.`,
+            })
+            continue
+          }
           if (options?.stripMedia && isMedia(part.mime)) {
             userMessage.parts.push({
               type: "text",
