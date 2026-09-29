@@ -116,6 +116,37 @@ describe("user messages", () => {
     ])
   })
 
+  test("passes non-image file parts to the provider", () => {
+    const result = convertToCopilotMessages([
+      {
+        role: "user",
+        content: [
+          {
+            type: "file",
+            data: new Uint8Array([80, 75, 3, 4]),
+            mediaType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename: "report.docx",
+          },
+        ],
+      },
+    ])
+
+    expect(result).toEqual([
+      {
+        role: "user",
+        content: [
+          {
+            type: "file",
+            file: {
+              filename: "report.docx",
+              file_data: "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEsDBA==",
+            },
+          },
+        ],
+      },
+    ])
+  })
+
   test("should handle multiple text parts without flattening", () => {
     const result = convertToCopilotMessages([
       {

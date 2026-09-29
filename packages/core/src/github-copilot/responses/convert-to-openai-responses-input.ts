@@ -1,9 +1,4 @@
-import {
-  type LanguageModelV3Prompt,
-  type LanguageModelV3ToolCallPart,
-  type SharedV3Warning,
-  UnsupportedFunctionalityError,
-} from "@ai-sdk/provider"
+import { type LanguageModelV3Prompt, type LanguageModelV3ToolCallPart, type SharedV3Warning } from "@ai-sdk/provider"
 import { convertToBase64, parseProviderOptions } from "@ai-sdk/provider-utils"
 import { z } from "zod/v4"
 import type { OpenAIResponsesInput, OpenAIResponsesReasoning } from "./openai-responses-api-types"
@@ -88,26 +83,19 @@ export async function convertToOpenAIResponsesInput({
                           }),
                     detail: part.providerOptions?.copilot?.imageDetail,
                   }
-                } else if (part.mediaType === "application/pdf") {
-                  if (part.data instanceof URL) {
-                    return {
-                      type: "input_file",
-                      file_url: part.data.toString(),
-                    }
-                  }
+                } else {
                   return {
                     type: "input_file",
-                    ...(typeof part.data === "string" && isFileId(part.data, fileIdPrefixes)
-                      ? { file_id: part.data }
-                      : {
-                          filename: part.filename ?? `part-${index}.pdf`,
-                          file_data: `data:application/pdf;base64,${convertToBase64(part.data)}`,
-                        }),
+                    ...(part.data instanceof URL
+                      ? { file_url: part.data.toString() }
+                      : typeof part.data === "string" && isFileId(part.data, fileIdPrefixes)
+                        ? { file_id: part.data }
+                        : {
+                            filename:
+                              part.filename ?? `part-${index}${part.mediaType === "application/pdf" ? ".pdf" : ""}`,
+                            file_data: `data:${part.mediaType};base64,${convertToBase64(part.data)}`,
+                          }),
                   }
-                } else {
-                  throw new UnsupportedFunctionalityError({
-                    functionality: `file part media type ${part.mediaType}`,
-                  })
                 }
               }
             }

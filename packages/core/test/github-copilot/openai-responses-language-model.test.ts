@@ -203,4 +203,44 @@ describe("convertToOpenAIResponsesInput", () => {
 
     expect((input[0] as any).content[0].detail).toBe("high")
   })
+
+  test("passes non-PDF files to the provider as input_file parts", async () => {
+    const { input } = await convertToOpenAIResponsesInput({
+      prompt: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "file",
+              data: new Uint8Array([80, 75, 3, 4]),
+              mediaType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              filename: "report.docx",
+            },
+            {
+              type: "file",
+              data: new Uint8Array([0, 0, 0, 24]),
+              mediaType: "video/mp4",
+              filename: "clip.mp4",
+            },
+          ],
+        },
+      ],
+      systemMessageMode: "system",
+      store: false,
+    })
+
+    expect(input).toEqual([
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_file",
+            filename: "report.docx",
+            file_data: "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEsDBA==",
+          },
+          { type: "input_file", filename: "clip.mp4", file_data: "data:video/mp4;base64,AAAAGA==" },
+        ],
+      },
+    ])
+  })
 })

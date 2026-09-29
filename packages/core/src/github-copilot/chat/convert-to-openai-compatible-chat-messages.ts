@@ -1,8 +1,4 @@
-import {
-  type LanguageModelV3Prompt,
-  type SharedV3ProviderOptions,
-  UnsupportedFunctionalityError,
-} from "@ai-sdk/provider"
+import { type LanguageModelV3Prompt, type SharedV3ProviderOptions } from "@ai-sdk/provider"
 import type { OpenAICompatibleChatPrompt } from "./openai-compatible-api-types"
 import { convertToBase64 } from "@ai-sdk/provider-utils"
 
@@ -56,10 +52,16 @@ export function convertToOpenAICompatibleChatMessages(prompt: LanguageModelV3Pro
                     },
                     ...partMetadata,
                   }
-                } else {
-                  throw new UnsupportedFunctionalityError({
-                    functionality: `file part media type ${part.mediaType}`,
-                  })
+                }
+                return {
+                  type: "file",
+                  file: {
+                    ...(part.filename ? { filename: part.filename } : {}),
+                    ...(part.data instanceof URL
+                      ? { file_url: part.data.toString() }
+                      : { file_data: `data:${part.mediaType};base64,${convertToBase64(part.data)}` }),
+                  },
+                  ...partMetadata,
                 }
               }
             }

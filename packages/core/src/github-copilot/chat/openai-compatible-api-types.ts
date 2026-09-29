@@ -27,11 +27,19 @@ export interface OpenAICompatibleUserMessage extends JsonRecord<OpenAICompatible
   content: string | Array<OpenAICompatibleContentPart>
 }
 
-export type OpenAICompatibleContentPart = OpenAICompatibleContentPartText | OpenAICompatibleContentPartImage
+export type OpenAICompatibleContentPart =
+  | OpenAICompatibleContentPartText
+  | OpenAICompatibleContentPartImage
+  | OpenAICompatibleContentPartFile
 
 export interface OpenAICompatibleContentPartImage extends JsonRecord {
   type: "image_url"
   image_url: { url: string }
+}
+
+export interface OpenAICompatibleContentPartFile extends JsonRecord {
+  type: "file"
+  file: { filename?: string; file_data?: string; file_url?: string }
 }
 
 export interface OpenAICompatibleContentPartText extends JsonRecord {
