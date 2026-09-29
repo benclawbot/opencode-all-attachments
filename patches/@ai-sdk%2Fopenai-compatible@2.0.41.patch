@@ -1,8 +1,26 @@
 diff --git a/dist/index.js b/dist/index.js
-index dca128d3a790378c51a24a16d92585178343b278..da75f9d64acd2b607abd15079ce2d03b7a8d675a 100644
+index dca128d3a790378c51a24a16d92585178343b278..9d64d63b200d49c2762be20c65fe2cb69a162cba 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -696,7 +696,7 @@ var OpenAICompatibleChatLanguageModel = class {
+@@ -206,9 +206,14 @@ function convertToOpenAICompatibleChatMessages(prompt) {
+                     ...partMetadata
+                   };
+                 }
+-                throw new import_provider.UnsupportedFunctionalityError({
+-                  functionality: `file part media type ${part.mediaType}`
+-                });
++                return {
++                  type: "file",
++                  file: {
++                    filename: part.filename ?? "attachment",
++                    ...(part.data instanceof URL ? { file_url: part.data.toString() } : { file_data: `data:${part.mediaType};base64,${(0, import_provider_utils.convertToBase64)(part.data)}` })
++                  },
++                  ...partMetadata
++                };
+               }
+             }
+           }),
+@@ -696,7 +701,7 @@ var OpenAICompatibleChatLanguageModel = class {
                finishReason = { unified: "error", raw: void 0 };
                controller.enqueue({
                  type: "error",
@@ -12,10 +30,28 @@ index dca128d3a790378c51a24a16d92585178343b278..da75f9d64acd2b607abd15079ce2d03b
                return;
              }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 3b1e1b6bdec5032e3b4fa5ffbcc8cdf3dfe1cc40..eaffc446f80552ea0b26573b89daa4dfc7776e6e 100644
+index 3b1e1b6bdec5032e3b4fa5ffbcc8cdf3dfe1cc40..e314480263d64e3daffdee7b79fa808020c0d960 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -683,7 +683,7 @@ var OpenAICompatibleChatLanguageModel = class {
+@@ -191,9 +191,14 @@ function convertToOpenAICompatibleChatMessages(prompt) {
+                     ...partMetadata
+                   };
+                 }
+-                throw new UnsupportedFunctionalityError({
+-                  functionality: `file part media type ${part.mediaType}`
+-                });
++                return {
++                  type: "file",
++                  file: {
++                    filename: part.filename ?? "attachment",
++                    ...(part.data instanceof URL ? { file_url: part.data.toString() } : { file_data: `data:${part.mediaType};base64,${convertToBase64(part.data)}` })
++                  },
++                  ...partMetadata
++                };
+               }
+             }
+           }),
+@@ -683,7 +688,7 @@ var OpenAICompatibleChatLanguageModel = class {
                finishReason = { unified: "error", raw: void 0 };
                controller.enqueue({
                  type: "error",
@@ -24,6 +60,44 @@ index 3b1e1b6bdec5032e3b4fa5ffbcc8cdf3dfe1cc40..eaffc446f80552ea0b26573b89daa4df
                });
                return;
              }
+diff --git a/src/chat/convert-to-openai-compatible-chat-messages.ts b/src/chat/convert-to-openai-compatible-chat-messages.ts
+index dd8b7b7659c21de07f875cc23188ac7f7c8290a8..6397f1e510d2a975ecca4ceeee9a1a2cd9acadc3 100644
+--- a/src/chat/convert-to-openai-compatible-chat-messages.ts
++++ b/src/chat/convert-to-openai-compatible-chat-messages.ts
+@@ -134,10 +134,16 @@ export function convertToOpenAICompatibleChatMessages(
+                   };
+                 }
+ 
+-                // Unsupported type
+-                throw new UnsupportedFunctionalityError({
+-                  functionality: `file part media type ${part.mediaType}`,
+-                });
++                return {
++                  type: 'file',
++                  file: {
++                    filename: part.filename ?? 'attachment',
++                    ...(part.data instanceof URL
++                      ? { file_url: part.data.toString() }
++                      : { file_data: `data:${part.mediaType};base64,${convertToBase64(part.data)}` }),
++                  },
++                  ...partMetadata,
++                };
+               }
+             }
+           }),
+diff --git a/src/chat/openai-compatible-api-types.ts b/src/chat/openai-compatible-api-types.ts
+index caefad537aeb88e6f76ae38d337143e6cd80146d..1c91f34c12fb46511338266a8468f03b1f0a5f36 100644
+--- a/src/chat/openai-compatible-api-types.ts
++++ b/src/chat/openai-compatible-api-types.ts
+@@ -50,7 +50,7 @@ export interface OpenAICompatibleContentPartInputAudio extends JsonRecord {
+ // File parts for Google API
+ export interface OpenAICompatibleContentPartFile extends JsonRecord {
+   type: 'file';
+-  file: { filename: string; file_data: string };
++  file: { filename: string; file_data: string } | { filename: string; file_url: string };
+ }
+ 
+ export interface OpenAICompatibleAssistantMessage extends JsonRecord<OpenAICompatibleMessageToolCall> {
 diff --git a/src/chat/openai-compatible-chat-language-model.ts b/src/chat/openai-compatible-chat-language-model.ts
 index 8c622db23c2d9a7373701f5a1b0c2ba109e24602..643c3db68a6043e097edc1122e0eb53fd13495c5 100644
 --- a/src/chat/openai-compatible-chat-language-model.ts
