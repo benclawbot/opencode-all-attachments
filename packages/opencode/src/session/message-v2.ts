@@ -137,7 +137,13 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
   const result: UIMessage[] = []
   const toolNames = new Set<string>()
   const needsLocalFile = (part: { mime: string }) =>
-    model.api.npm === "@ai-sdk/openai-compatible" && !part.mime.startsWith("image/") && !part.mime.startsWith("audio/")
+    (part.mime.startsWith("image/") && !model.capabilities.input.image) ||
+    (part.mime.startsWith("audio/") && !model.capabilities.input.audio) ||
+    (part.mime.startsWith("video/") && !model.capabilities.input.video) ||
+    (part.mime === "application/pdf" && !model.capabilities.input.pdf) ||
+    (model.api.npm === "@ai-sdk/openai-compatible" &&
+      !part.mime.startsWith("image/") &&
+      !part.mime.startsWith("audio/"))
   const attachmentText = Effect.fnUntraced(function* (part: { filename?: string; url: string; mime: string }) {
     const filename = yield* Effect.promise(() => attachmentPath(part))
     return `Attached file available to tools: ${JSON.stringify(filename)} (${part.mime}). Original filename: ${JSON.stringify(part.filename ?? "attachment")}. Use tools to read or extract its contents.`
@@ -149,8 +155,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
   // to extract media and inject as user messages. Some SDKs only support a subset
   // of media in tool results; e.g. Bedrock supports images but not PDFs there.
   //
-  // Only apply this workaround if the model actually supports that media input -
-  // otherwise unsupportedParts() will turn it into a user-visible error.
+  // Unsupported media is routed through local tools before this workaround.
   const supportsMediaInToolResult = (attachment: { mime: string }) => {
     if (model.api.npm === "@ai-sdk/anthropic") return true
     if (model.api.npm === "@ai-sdk/openai") return true

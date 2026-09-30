@@ -32,7 +32,7 @@ const model: Provider.Model = {
     input: {
       text: true,
       audio: false,
-      image: false,
+      image: true,
       video: false,
       pdf: false,
     },
@@ -373,53 +373,71 @@ describe("session.message-v2.toModelMessage", () => {
   })
 
   test.each([
-    ["notes.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
-    ["../../report.pdf", "application/pdf"],
-  ])("keeps uploaded and tool-returned %s files accessible without sending file parts", async (filename, mime) => {
-    const attachment = {
-      ...basePart("m-user", "p-file"),
-      type: "file" as const,
-      filename,
-      mime,
-      url: `data:${mime};base64,AQID`,
-    }
-    const compatible = { ...model, api: { ...model.api, npm: "@ai-sdk/openai-compatible" } }
-    const input: SessionV1.WithParts[] = [
-      { info: userInfo("m-user"), parts: [attachment] as SessionV1.Part[] },
-      {
-        info: assistantInfo("m-assistant", "m-user"),
-        parts: [
-          {
-            ...basePart("m-assistant", "p-tool"),
-            type: "tool",
-            callID: "call-1",
-            tool: "read",
-            state: {
-              status: "completed",
-              input: { filePath: filename },
-              output: "Document read successfully",
-              title: "Read",
-              metadata: {},
-              time: { start: 0, end: 1 },
-              attachments: [attachment],
+    [
+      "notes.docx",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "@ai-sdk/openai-compatible",
+    ],
+    ["../../report.pdf", "application/pdf", "@ai-sdk/openai-compatible"],
+    ["preview.png", "image/png", "@ai-sdk/openai-compatible"],
+    ["recording.wav", "audio/wav", "@ai-sdk/openai-compatible"],
+    ["clip.mp4", "video/mp4", "@ai-sdk/openai-compatible"],
+    ["report.pdf", "application/pdf", "@ai-sdk/openai"],
+    ["preview.png", "image/png", "@ai-sdk/openai"],
+    ["recording.wav", "audio/wav", "@ai-sdk/openai"],
+    ["clip.mp4", "video/mp4", "@ai-sdk/openai"],
+  ])(
+    "keeps uploaded and tool-returned %s files accessible to text-only models (%s, %s)",
+    async (filename, mime, npm) => {
+      const attachment = {
+        ...basePart("m-user", "p-file"),
+        type: "file" as const,
+        filename,
+        mime,
+        url: `data:${mime};base64,AQID`,
+      }
+      const textOnly = {
+        ...model,
+        api: { ...model.api, npm },
+        capabilities: { ...model.capabilities, input: { ...model.capabilities.input, image: false } },
+      }
+      const input: SessionV1.WithParts[] = [
+        { info: userInfo("m-user"), parts: [attachment] as SessionV1.Part[] },
+        {
+          info: assistantInfo("m-assistant", "m-user"),
+          parts: [
+            {
+              ...basePart("m-assistant", "p-tool"),
+              type: "tool",
+              callID: "call-1",
+              tool: "read",
+              state: {
+                status: "completed",
+                input: { filePath: filename },
+                output: "Document read successfully",
+                title: "Read",
+                metadata: {},
+                time: { start: 0, end: 1 },
+                attachments: [attachment],
+              },
             },
-          },
-        ] as SessionV1.Part[],
-      },
-    ]
-    const messages = await MessageV2.toModelMessages(input, compatible)
-    const saved = await attachmentPath(attachment)
-    const text = `Attached file available to tools: ${JSON.stringify(saved)} (${mime}). Original filename: ${JSON.stringify(filename)}. Use tools to read or extract its contents.`
-    expect(path.dirname(saved)).toBe(path.join(Global.Path.data, "attachments"))
-    expect(path.extname(saved)).toBe(path.extname(filename))
-    expect(await Bun.file(saved).bytes()).toEqual(Uint8Array.of(1, 2, 3))
-    expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "tool"])
-    expect(messages[0].content).toEqual([{ type: "text", text }])
-    expect(messages[2].content).toEqual([
-      expect.objectContaining({ output: { type: "text", value: `Document read successfully\n\n${text}` } }),
-    ])
-    expect(await MessageV2.toModelMessages(input, compatible)).toEqual(messages)
-  })
+          ] as SessionV1.Part[],
+        },
+      ]
+      const messages = await MessageV2.toModelMessages(input, textOnly)
+      const saved = await attachmentPath(attachment)
+      const text = `Attached file available to tools: ${JSON.stringify(saved)} (${mime}). Original filename: ${JSON.stringify(filename)}. Use tools to read or extract its contents.`
+      expect(path.dirname(saved)).toBe(path.join(Global.Path.data, "attachments"))
+      expect(path.extname(saved)).toBe(path.extname(filename))
+      expect(await Bun.file(saved).bytes()).toEqual(Uint8Array.of(1, 2, 3))
+      expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "tool"])
+      expect(messages[0].content).toEqual([{ type: "text", text }])
+      expect(messages[2].content).toEqual([
+        expect.objectContaining({ output: { type: "text", value: `Document read successfully\n\n${text}` } }),
+      ])
+      expect(await MessageV2.toModelMessages(input, textOnly)).toEqual(messages)
+    },
+  )
 
   test("validates attachment bytes and preserves URL references and MIME-derived extensions", async () => {
     const mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
