@@ -1,5 +1,5 @@
 import { SessionID, MessageID } from "./schema"
-import { matchesLocalAttachment } from "@/util/attachment-file"
+import { attachmentPath } from "@/util/attachment-file"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import {
@@ -136,6 +136,12 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
 ) {
   const result: UIMessage[] = []
   const toolNames = new Set<string>()
+  const needsLocalFile = (part: { mime: string }) =>
+    model.api.npm === "@ai-sdk/openai-compatible" && !part.mime.startsWith("image/") && !part.mime.startsWith("audio/")
+  const attachmentText = Effect.fnUntraced(function* (part: { filename?: string; url: string; mime: string }) {
+    const filename = yield* Effect.promise(() => attachmentPath(part))
+    return `Attached file available to tools: ${JSON.stringify(filename)} (${part.mime}). Original filename: ${JSON.stringify(part.filename ?? "attachment")}. Use tools to read or extract its contents.`
+  })
   // Track media from tool results that need to be injected as user messages
   // for providers that don't support that media type in tool results.
   //
@@ -215,15 +221,10 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
           })
         // text/plain and directory files are converted into text parts, ignore them
         if (part.type === "file" && part.mime !== "text/plain" && part.mime !== "application/x-directory") {
-          if (
-            model.api.npm === "@ai-sdk/openai-compatible" &&
-            !part.mime.startsWith("image/") &&
-            !part.mime.startsWith("audio/") &&
-            (yield* Effect.promise(() => matchesLocalAttachment(part)))
-          ) {
+          if (needsLocalFile(part) && !(options?.stripMedia && isMedia(part.mime))) {
             userMessage.parts.push({
               type: "text",
-              text: `Attached file available to tools: ${JSON.stringify(part.filename)} (${part.mime}). Use the read tool to inspect it.`,
+              text: yield* attachmentText(part),
             })
             continue
           }
@@ -307,19 +308,24 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
         if (part.type === "tool") {
           toolNames.add(part.tool)
           if (part.state.status === "completed") {
-            const outputText = part.state.time.compacted
+            const text = part.state.time.compacted
               ? "[Old tool result content cleared]"
               : truncateToolOutput(part.state.output, options?.toolOutputMaxChars)
             const attachments = part.state.time.compacted || options?.stripMedia ? [] : (part.state.attachments ?? [])
+            const outputText = [
+              text,
+              ...(yield* Effect.forEach(attachments.filter(needsLocalFile), attachmentText)),
+            ].join("\n\n")
+            const supported = attachments.filter((attachment) => !needsLocalFile(attachment))
 
             // For providers that don't support media in tool results, extract media files
             // (images, PDFs) to be sent as a separate user message
-            const mediaAttachments = attachments.filter((a) => isMedia(a.mime))
+            const mediaAttachments = supported.filter((a) => isMedia(a.mime))
             const extractedMedia = mediaAttachments.filter((a) => !supportsMediaInToolResult(a))
             if (extractedMedia.length > 0) {
               media.push(...extractedMedia)
             }
-            const finalAttachments = attachments.filter((a) => !isMedia(a.mime) || supportsMediaInToolResult(a))
+            const finalAttachments = supported.filter((a) => !isMedia(a.mime) || supportsMediaInToolResult(a))
 
             const output =
               finalAttachments.length > 0

@@ -9,6 +9,9 @@ import { SessionID, MessageID, PartID } from "../../src/session/schema"
 import { Question } from "../../src/question"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
+import { Global } from "@opencode-ai/core/global"
+import { attachmentPath } from "@/util/attachment-file"
+import path from "node:path"
 
 const sessionID = SessionID.make("session")
 const providerID = ProviderV2.ID.make("test")
@@ -321,7 +324,8 @@ describe("session.message-v2.toModelMessage", () => {
 
   test("gives OpenAI-compatible models a local file path when their chat API cannot accept files", async () => {
     const filename = import.meta.filename
-    const url = `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${Buffer.from(await Bun.file(filename).bytes()).toString("base64")}`
+    const original = await Bun.file(filename).bytes()
+    const url = `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${Buffer.from(original).toString("base64")}`
     const attachment = {
       ...basePart("m-user", "p-file"),
       type: "file" as const,
@@ -338,7 +342,7 @@ describe("session.message-v2.toModelMessage", () => {
         content: [
           {
             type: "text",
-            text: `Attached file available to tools: ${JSON.stringify(filename)} (${attachment.mime}). Use the read tool to inspect it.`,
+            text: `Attached file available to tools: ${JSON.stringify(filename)} (${attachment.mime}). Original filename: ${JSON.stringify(filename)}. Use tools to read or extract its contents.`,
           },
         ],
       },
@@ -351,14 +355,85 @@ describe("session.message-v2.toModelMessage", () => {
     ])
 
     const changed = [{ ...input[0], parts: [{ ...attachment, url: "data:application/octet-stream;base64,AQID" }] }]
+    const saved = await attachmentPath(changed[0].parts[0])
+    expect(saved).not.toBe(filename)
+    expect(await Bun.file(saved).bytes()).toEqual(Uint8Array.of(1, 2, 3))
     expect(await MessageV2.toModelMessages(changed, compatible)).toStrictEqual([
       {
         role: "user",
         content: [
-          { type: "file", data: "data:application/octet-stream;base64,AQID", filename, mediaType: attachment.mime },
+          {
+            type: "text",
+            text: `Attached file available to tools: ${JSON.stringify(saved)} (${attachment.mime}). Original filename: ${JSON.stringify(filename)}. Use tools to read or extract its contents.`,
+          },
         ],
       },
     ])
+    expect(await Bun.file(filename).bytes()).toEqual(original)
+  })
+
+  test.each([
+    ["notes.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    ["../../report.pdf", "application/pdf"],
+  ])("keeps uploaded and tool-returned %s files accessible without sending file parts", async (filename, mime) => {
+    const attachment = {
+      ...basePart("m-user", "p-file"),
+      type: "file" as const,
+      filename,
+      mime,
+      url: `data:${mime};base64,AQID`,
+    }
+    const compatible = { ...model, api: { ...model.api, npm: "@ai-sdk/openai-compatible" } }
+    const input: SessionV1.WithParts[] = [
+      { info: userInfo("m-user"), parts: [attachment] as SessionV1.Part[] },
+      {
+        info: assistantInfo("m-assistant", "m-user"),
+        parts: [
+          {
+            ...basePart("m-assistant", "p-tool"),
+            type: "tool",
+            callID: "call-1",
+            tool: "read",
+            state: {
+              status: "completed",
+              input: { filePath: filename },
+              output: "Document read successfully",
+              title: "Read",
+              metadata: {},
+              time: { start: 0, end: 1 },
+              attachments: [attachment],
+            },
+          },
+        ] as SessionV1.Part[],
+      },
+    ]
+    const messages = await MessageV2.toModelMessages(input, compatible)
+    const saved = await attachmentPath(attachment)
+    const text = `Attached file available to tools: ${JSON.stringify(saved)} (${mime}). Original filename: ${JSON.stringify(filename)}. Use tools to read or extract its contents.`
+    expect(path.dirname(saved)).toBe(path.join(Global.Path.data, "attachments"))
+    expect(path.extname(saved)).toBe(path.extname(filename))
+    expect(await Bun.file(saved).bytes()).toEqual(Uint8Array.of(1, 2, 3))
+    expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "tool"])
+    expect(messages[0].content).toEqual([{ type: "text", text }])
+    expect(messages[2].content).toEqual([
+      expect.objectContaining({ output: { type: "text", value: `Document read successfully\n\n${text}` } }),
+    ])
+    expect(await MessageV2.toModelMessages(input, compatible)).toEqual(messages)
+  })
+
+  test("validates attachment bytes and preserves URL references and MIME-derived extensions", async () => {
+    const mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    const saved = await attachmentPath({ mime, url: `data:${mime};base64,AQID` })
+    expect(path.extname(saved)).toBe(".docx")
+    expect(await Bun.file(saved).bytes()).toEqual(Uint8Array.of(1, 2, 3))
+    const url = "https://example.com/notes.docx"
+    expect(await attachmentPath({ mime, url })).toBe(url)
+    await expect(attachmentPath({ mime, url: `data:${mime};base64,A` })).rejects.toThrow(
+      "Invalid attachment base64 data",
+    )
+    await expect(attachmentPath({ mime, url: `data:${mime};base64,%%%` })).rejects.toThrow(
+      "Invalid attachment data URL",
+    )
   })
 
   test("converts assistant tool completion into tool-call + tool-result messages with attachments", async () => {
